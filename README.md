@@ -6,18 +6,22 @@
 
 ## English
 
-`snapback-layout` is a lightweight, background utility for Windows that lets you capture and restore your window layouts instantly. It resides in the system tray, monitoring layouts, and restores them either with global hotkeys or from a tray context menu.
+`snapback-layout` is a lightweight, background utility for Windows that lets you capture and restore your window layouts instantly. It resides in the system tray, monitoring layouts, and restores them either with global hotkeys or from an intuitive left-click tray popup menu.
 
 ### Key Features
 
 * 📸 **Instant Layout Backup & Restore**: Instantly save current desktop layouts and restore them precisely.
 * ⌨️ **Global Hotkey Customization**: Custom hotkeys for saving and restoring layouts (supports modifier keys including the `Windows` key).
 * ⏱️ **Silent Auto-Save**: Periodically backs up your layout in the background without disturbing your work.
-* 📜 **Visual History Menu**: Left-click the system tray icon to display a dedicated popup menu showing the last 12 snapshots directly. Each item displays the active foreground window title at the time of the snapshot and the time (HH:mm). Clicking an item immediately restores that layout.
+* 📜 **Unified History Popup Menu**: Left-clicking the system tray icon displays a unified menu with instructions. Items display creation times, relative ages (e.g. `(5m ago)`), active window titles, and workspace tags (e.g. `[devenv, chrome]`).
+* ⭐️ **Star / Lock Layouts**: Click the `☆` icon on any history item to toggle star status (`★`). Starred layouts are pinned to the top section, moved to a protected folder (`snapshots/favorites/`), and excluded from auto-pruning. The menu refreshes in-place instantly when starred.
+* 🗺️ **Visual Map Hover Preview**: Hovering over any history item opens a small, non-obvious popup window next to the menu that visualizes the monitors and stacked windows. Topmost windows are correctly layered on top, minimized windows are excluded, and 6-letter process names are shown inside the boxes.
 * 🖥️ **DPI Correction**: Automatically scales window bounds and relative coordinates when restoring layouts across monitors with different DPI factors.
 * 🛟 **Off-screen Window Rescue**: Prevents "lost windows" by automatically centering coordinates onto the primary monitor if a saved window would restore off-screen (e.g., after disconnecting a monitor).
-* 🥞 **Exact Z-Order Restoration**: Accurately restores the relative layering stack (front-to-back order) of all windows.
-* ⚙️ **Modern Settings Form**: Grouped dialog layout containing accent purple visual styling, a recording state feedback indicator for hotkey inputs, and a "Reset Defaults" option.
+* 🥞 **Exact Z-Order Restoration**: Accurately restores the relative layering stack (front-to-back order) of all windows using sequential chaining.
+* 📐 **Accurate Window Snapping (GetWindowRect)**: Correctly captures layout positions by utilizing `GetWindowRect` for normal windows to properly retrieve Windows 11 snap layout boundaries.
+* 🚀 **Windows Startup Integration**: Option to automatically start the application on Windows logon, managed easily via the Registry.
+* 🛡️ **Leak-Free Native Resource Management**: Explicitly disposes of GDI handles (`HICON`) and menu item objects to prevent resource leaks during long-running background execution.
 * ⚡ **Ultra-lightweight**: Written in pure C# using Win32 APIs directly. No external dependencies, consuming less than 20MB of memory.
 
 ---
@@ -49,19 +53,23 @@ dotnet run
 
 ## 日本語
 
-`snapback-layout` は、Windows のウィンドウ配置（レイアウト）を瞬時に保存・復元できる軽量な常駐型ユーティリティです。システムトレイに常駐し、キーボードショートカットやメニュー操作によっていつでも元のレイアウトを復元します。
+`snapback-layout` は、Windows のウィンドウ配置（レイアウト）を瞬時に保存・復元できる軽量な常駐型ユーティリティです。システムトレイに常駐し、キーボードショートカットや一元化された左クリックメニュー操作によっていつでも元のレイアウトを復元します。
 
 ### 主な機能
 
 * 📸 **レイアウトの即時保存・復元**: 現在のウィンドウ配置をキャプチャし、必要な時にいつでも元の位置・サイズに復帰させます。
 * ⌨️ **カスタムホットキー**: 保存・復元のホットキーを自由に変更可能（`Windows` キーを含むショートカットキーに対応）。
 * ⏱️ **静かな自動保存 (Auto-Save)**: 作業を邪魔しないサイレント仕様で、指定した間隔で自動的にバックアップを保存します。
-* 📜 **履歴メニューへのクイックアクセス**: システムトレイアイコンを左クリックすると、直近12回の履歴だけを表示する専用のポップアップが展開されます。各項目にはスナップショット作成時にアクティブだったウィンドウタイトルと作成時刻（HH:mm）が分かりやすく表示され、クリックするだけで瞬時に復元を実行できます。
-* 🖥️ **DPI自動補正機能**: 異なるDPI（ディスプレイ拡大率）のモニター間でレイアウトを復元する際、解像度に合わせてサイズや相対位置を自動的にスケーリング補正します。
+* 📜 **一元化された履歴メニュー**: システムトレイアイコンを左クリックすると、説明付きの履歴ポップアップメニューが展開されます。各項目には相対的な経過時間（例：`(5m ago)`）やアクティブなアプリ名、起動中アプリのワークスペースタグ（例：`[devenv, chrome]`）が表示されます。
+* ⭐️ **お気に入り（スター）機能**: 各項目の「☆」マークをクリックすると「★」に変わりお気に入りに登録されます。登録時はメニューを閉じず、その場で瞬時に再描画されます。お気に入りされたレイアウトは、自動クリーンアップ（Prune）から保護され、メニュー最上部の「★ Starred Layouts」欄に固定されます。
+* 🗺️ **ビジュアルレイアウトプレビュー**: 履歴にホバーすると、モニターとウィンドウの配置関係を縮小表示したプレビュー（ミニマップ）が表示されます。最小化ウィンドウは除外され、ウィンドウの重なり順（前後関係）を正確に再現し、最大6文字のプロセス名が枠内に描画されます。
+* 🖥️ **DPI自動補正機能**: 異なるDPIのモニター間でレイアウトを復元する際、解像度に合わせてサイズや相対位置を自動的にスケーリング補正します。
 * 🛟 **画面外ウィンドウ救出機能**: モニター接続解除などにより復元先座標が画面外に孤立してしまう場合、メインモニターの安全な領域（中央）へ自動的に引き戻します。
 * 🥞 **正確な Z-Order 復元**: すべてのウィンドウの重なり順（前後関係）を保存時の順番通りに忠実に再現します。
-* ⚙️ **モダンな設定画面**: 設定項目を綺麗にグループ化し、ブランドパープルを基調としたフラットデザイン。ホットキー録音状態のカラーフィードバックや、初期値リセットボタンを搭載しています。
-* ⚡ **超軽量動作**: Win32 API を直接利用するピュアな C# 実装。外部 DLL を一切含まず、常駐時のメモリ消費量は 20MB 以下です。
+* 📐 **正確なスナップ位置のキャプチャ**: Windows 11 のスナップレイアウトの境界線を正確にキャプチャするため、通常状態のウィンドウは `GetWindowRect` から物理座標を取得します。
+* 🚀 **Windows スタートアップ登録**: Windows 起動時に自動でバックグラウンド常駐を開始するオプションを提供します（レジストリによる制御）。
+* 🛡️ **リソースリーク防止設計**: 長時間の常駐動作に伴うリソースリークを防ぐため、動的に生成したトレイアイコンの `HICON` やメニュー項目などのネイティブ GDI リソースを明示的に破棄します。
+* ⚡ **超軽量動作**: Win32 API を直接利用する C# 実装。常駐時のメモリ消費量は 20MB 以下です。
 
 ---
 

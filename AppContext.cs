@@ -12,7 +12,6 @@ namespace snapback_layout;
 
 public class AppContext : ApplicationContext
 {
-    private readonly ToolStripMenuItem _historyMenuItem;
     private readonly ToolStripMenuItem _saveMenuItem;
     private readonly ToolStripMenuItem _restoreMenuItem;
     private readonly System.Windows.Forms.Timer _autoSaveTimer;
@@ -41,16 +40,12 @@ public class AppContext : ApplicationContext
         _restoreMenuItem = new ToolStripMenuItem("Restore Layout", null, (s, e) => OnRestoreLayout());
         UpdateMenuTexts();
         
-        _historyMenuItem = new ToolStripMenuItem("History");
-        _contextMenu.Opening += ContextMenu_Opening;
-
         var settingsItem = new ToolStripMenuItem("Settings...", null, (s, e) => OnShowSettings());
         var exitItem = new ToolStripMenuItem("Exit", null, (s, e) => ExitThread());
 
         _contextMenu.Items.AddRange(new ToolStripItem[] {
             _saveMenuItem,
             _restoreMenuItem,
-            _historyMenuItem,
             new ToolStripSeparator(),
             settingsItem,
             exitItem
@@ -200,31 +195,20 @@ public class AppContext : ApplicationContext
         }
     }
 
-    private void ContextMenu_Opening(object? sender, CancelEventArgs e)
-    {
-        // Dispose existing items to prevent GDI resource leaks
-        while (_historyMenuItem.DropDownItems.Count > 0)
-        {
-            var item = _historyMenuItem.DropDownItems[0];
-            _historyMenuItem.DropDownItems.RemoveAt(0);
-            item.Dispose();
-        }
 
-        var cachedSnapshots = SnapshotManager.GetCachedSnapshots();
-        if (cachedSnapshots.Count == 0)
-        {
-            _historyMenuItem.DropDownItems.Add(new ToolStripMenuItem("No snapshots found") { Enabled = false });
-        }
-        else
-        {
-            foreach (var item in cachedSnapshots)
-            {
-                _historyMenuItem.DropDownItems.Add(CreateSnapshotMenuItem(item));
-            }
-        }
-    }
+
+
 
     private void ShowHistoryOnlyMenu()
+    {
+        PopulateHistoryMenu();
+        // Force the application's message window/thread to the foreground.
+        // This is a known Win32 requirement to ensure the context menu automatically dismisses when clicking away.
+        Win32.SetForegroundWindow(_hotkeyWindow.Handle);
+        _historyContextMenu.Show(Cursor.Position);
+    }
+
+    private void PopulateHistoryMenu()
     {
         // Clear existing items to prevent duplicates/leaks
         while (_historyContextMenu.Items.Count > 0)
@@ -233,26 +217,91 @@ public class AppContext : ApplicationContext
             _historyContextMenu.Items.RemoveAt(0);
             item.Dispose();
         }
+
+        // Add visual descriptive header
+        var headerTitle = new ToolStripMenuItem("Restore Window Layout History") { Enabled = false };
+        headerTitle.Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold);
+        
+        var headerSub = new ToolStripMenuItem("  (Hover to preview layout | Click ★ to pin)") { Enabled = false };
+        headerSub.Font = new Font(SystemFonts.DefaultFont.FontFamily, 7.5F, FontStyle.Regular);
+        headerSub.ForeColor = Color.Gray;
+
+        _historyContextMenu.Items.Add(headerTitle);
+        _historyContextMenu.Items.Add(headerSub);
+        _historyContextMenu.Items.Add(new ToolStripSeparator());
         
         var cachedSnapshots = SnapshotManager.GetCachedSnapshots();
         if (cachedSnapshots.Count == 0)
         {
             _historyContextMenu.Items.Add(new ToolStripMenuItem("No snapshots found") { Enabled = false });
+            _historyContextMenu.Items.Add(new ToolStripSeparator());
+            
+            var guideItem = new ToolStripMenuItem("👉 Save your first layout:") { Enabled = false };
+            guideItem.Font = new Font(SystemFonts.DefaultFont, FontStyle.Italic);
+            
+            var guideItem2 = new ToolStripMenuItem("   Right-click this icon & select 'Save Layout'") { Enabled = false };
+            guideItem2.Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.25F, FontStyle.Regular);
+            
+            _historyContextMenu.Items.Add(guideItem);
+            _historyContextMenu.Items.Add(guideItem2);
         }
         else
         {
-            foreach (var item in cachedSnapshots)
+            var starred = cachedSnapshots.Where(c => c.IsFavorite).ToList();
+            if (starred.Count > 0)
             {
-                _historyContextMenu.Items.Add(CreateSnapshotMenuItem(item));
+                _historyContextMenu.Items.Add(new ToolStripMenuItem("★ Starred Layouts") { Enabled = false, Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold) });
+                foreach (var item in starred)
+                {
+                    _historyContextMenu.Items.Add(CreateSnapshotMenuItem(item));
+                }
+                _historyContextMenu.Items.Add(new ToolStripSeparator());
+            }
+
+            var recents = cachedSnapshots.Where(c => !c.IsFavorite).ToList();
+            if (recents.Count > 0)
+            {
+                if (starred.Count > 0)
+                {
+                    _historyContextMenu.Items.Add(new ToolStripMenuItem("Recent Layouts") { Enabled = false, Font = new Font(SystemFonts.DefaultFont, FontStyle.Italic) });
+                }
+                foreach (var item in recents)
+                {
+                    _historyContextMenu.Items.Add(CreateSnapshotMenuItem(item));
+                }
             }
         }
+    }
 
-        _historyContextMenu.Show(Cursor.Position);
+    private static string GetRelativeTime(DateTime creationTime)
+    {
+        var span = DateTime.Now - creationTime;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
+    }
+
+    private ToolStripDropDown? _activePreviewDropDown;
+
+    private void ParentDropDown_Closed(object? sender, ToolStripDropDownClosedEventArgs e)
+    {
+        CloseActivePreview();
+    }
+
+    private void CloseActivePreview()
+    {
+        if (_activePreviewDropDown != null)
+        {
+            _activePreviewDropDown.Close();
+            _activePreviewDropDown.Dispose();
+            _activePreviewDropDown = null;
+        }
     }
 
     private ToolStripMenuItem CreateSnapshotMenuItem(SnapshotCacheItem item)
     {
-        string displayLabel = item.Name;
+        string timeLabel = item.Name;
         if (item.Name.StartsWith("snapshot_") && item.Name.EndsWith(".json"))
         {
             string nameWithoutExt = Path.GetFileNameWithoutExtension(item.Name);
@@ -260,51 +309,145 @@ public class AppContext : ApplicationContext
             if (DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss", null, System.Globalization.DateTimeStyles.None, out DateTime dt) ||
                 DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss_fff", null, System.Globalization.DateTimeStyles.None, out dt))
             {
-                displayLabel = dt.ToString("HH:mm");
+                timeLabel = $"{dt.ToString("HH:mm")} ({GetRelativeTime(item.CreationTime)})";
             }
         }
 
-        string displayName = displayLabel;
+        string displayName = timeLabel;
         var snapshot = item.Snapshot;
         if (snapshot != null && snapshot.Windows != null)
         {
+            // Collect workspace processes
+            var appNames = snapshot.Windows
+                .Select(w => w.ProcessName)
+                .Where(n => !string.IsNullOrEmpty(n) && !n.Equals("explorer", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(3)
+                .ToList();
+
+            string workspaceTag = appNames.Count > 0 ? $" [{string.Join(", ", appNames)}]" : "";
+
             var foregroundWin = snapshot.Windows.FirstOrDefault(w => w.IsForeground);
             if (foregroundWin == null || string.IsNullOrEmpty(foregroundWin.Title))
             {
                 foregroundWin = snapshot.Windows.FirstOrDefault(w => !string.IsNullOrEmpty(w.Title));
             }
 
-            int otherWindowsCount = snapshot.Windows.Count(w => !string.IsNullOrEmpty(w.Title)) - 1;
-            if (otherWindowsCount < 0) otherWindowsCount = 0;
-
             if (foregroundWin != null)
             {
-                string processTag = string.IsNullOrEmpty(foregroundWin.ProcessName) ? "" : $"[{foregroundWin.ProcessName}] ";
                 string activeTitle = foregroundWin.Title;
-                if (activeTitle.Length > 25) activeTitle = activeTitle.Substring(0, 22) + "...";
-                
-                string countTag = otherWindowsCount > 0 ? $" (+{otherWindowsCount})" : "";
-                displayName = $"{displayLabel} - Active: {processTag}{activeTitle}{countTag}";
+                if (activeTitle.Length > 20) activeTitle = activeTitle.Substring(0, 17) + "...";
+                displayName = $"{timeLabel} - Active: {activeTitle}{workspaceTag}";
             }
-            else
+            else if (workspaceTag.Length > 0)
             {
-                var appNames = snapshot.Windows
-                    .Select(w => w.ProcessName)
-                    .Where(n => !string.IsNullOrEmpty(n))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Take(3)
-                    .ToList();
-
-                if (appNames.Count > 0)
-                {
-                    displayName = $"{displayLabel} ({string.Join(", ", appNames)})";
-                }
+                displayName = $"{timeLabel} - Apps:{workspaceTag}";
             }
         }
 
-        var snapshotItem = new ToolStripMenuItem(displayName);
-        snapshotItem.Click += (s, ev) => RestoreSnapshotAction(item.FullName, displayLabel);
+        // Custom drawn item to support the interactive Star icon
+        var snapshotItem = new ToolStripMenuItem(displayName)
+        {
+            Image = item.IsFavorite 
+                ? CreateStarIcon(Color.FromArgb(234, 179, 8)) // Golden filled star
+                : CreateStarIcon(Color.FromArgb(156, 163, 175)), // Gray outline star
+            ImageScaling = ToolStripItemImageScaling.None
+        };
+
+        // Listen for mouse movement to toggle favorite via icon click
+        snapshotItem.MouseDown += (s, ev) =>
+        {
+            // The image margin is on the left; click inside the left 32px is treated as a Favorite Toggle click
+            if (ev.X >= 0 && ev.X <= 32)
+            {
+                SnapshotManager.ToggleFavorite(item);
+                
+                // Re-populate menu items in place to avoid closing/opening
+                PopulateHistoryMenu();
+            }
+            else
+            {
+                RestoreSnapshotAction(item.FullName, timeLabel);
+            }
+        };
+
+        // Hover popup preview window setup using ToolStripDropDown (ensures no focus issues)
+        snapshotItem.MouseEnter += (s, ev) =>
+        {
+            if (item.Snapshot != null)
+            {
+                CloseActivePreview();
+
+                var previewControl = new PreviewControl(item.Snapshot)
+                {
+                    Size = new Size(320, 200)
+                };
+
+                var host = new ToolStripControlHost(previewControl)
+                {
+                    Padding = Padding.Empty,
+                    Margin = Padding.Empty,
+                    AutoSize = false
+                };
+
+                _activePreviewDropDown = new ToolStripDropDown
+                {
+                    Padding = Padding.Empty,
+                    Margin = Padding.Empty,
+                    AutoClose = false,
+                    DropShadowEnabled = true
+                };
+                _activePreviewDropDown.Items.Add(host);
+
+                if (snapshotItem.Owner is ToolStripDropDown parentDropDown)
+                {
+                    parentDropDown.Closed -= ParentDropDown_Closed;
+                    parentDropDown.Closed += ParentDropDown_Closed;
+
+                    var screenPt = parentDropDown.PointToScreen(new Point(snapshotItem.Bounds.Left, snapshotItem.Bounds.Top));
+                    
+                    int px = screenPt.X - 320 - 5;
+                    if (px < 0) px = screenPt.X + snapshotItem.Bounds.Width + 5;
+
+                    int py = screenPt.Y - (200 / 2) + (snapshotItem.Bounds.Height / 2);
+
+                    _activePreviewDropDown.Show(new Point(px, py));
+                }
+            }
+        };
+
+        snapshotItem.MouseLeave += (s, ev) =>
+        {
+            CloseActivePreview();
+        };
+
         return snapshotItem;
+    }
+
+    private static Bitmap CreateStarIcon(Color color)
+    {
+        var bmp = new Bitmap(16, 16);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var brush = new SolidBrush(color);
+            
+            // Draw a simple 5-point star polygon
+            PointF[] points = {
+                new PointF(8, 1),
+                new PointF(10.5f, 6),
+                new PointF(16, 6.5f),
+                new PointF(12, 10.5f),
+                new PointF(13, 16),
+                new PointF(8, 13.5f),
+                new PointF(3, 16),
+                new PointF(4, 10.5f),
+                new PointF(0, 6.5f),
+                new PointF(5.5f, 6)
+            };
+            g.FillPolygon(brush, points);
+        }
+        return bmp;
     }
 
     private void RestoreSnapshotAction(string path, string displayName)

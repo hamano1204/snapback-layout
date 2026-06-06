@@ -155,7 +155,20 @@ public static class WindowEnumerator
             if (placement.showCmd == Win32.SW_SHOWMAXIMIZED) state = WindowState.Maximized;
             else if (placement.showCmd == Win32.SW_SHOWMINIMIZED) state = WindowState.Minimized;
 
-            var rect = placement.rcNormalPosition;
+            Win32.RECT rect;
+            if (state == WindowState.Normal)
+            {
+                // Retrieve current visible bounds (works correctly for snapped windows)
+                if (!Win32.GetWindowRect(hWnd, out rect))
+                {
+                    rect = placement.rcNormalPosition;
+                }
+            }
+            else
+            {
+                // For maximized/minimized, we want the restore position stored in rcNormalPosition
+                rect = placement.rcNormalPosition;
+            }
 
             // Find monitor index using MonitorFromWindow and matching DeviceName
             int monitorId = 1;

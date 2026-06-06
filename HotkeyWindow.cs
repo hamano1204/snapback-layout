@@ -17,6 +17,12 @@ public class HotkeyWindow : NativeWindow, IDisposable
         
         // Create handle for the window to receive messages
         var cp = new CreateParams();
+        
+        // Make this window a message-only window (HWND_MESSAGE)
+        // This completely hides it from the taskbar, Alt+Tab, and desktop rendering,
+        // while still allowing it to receive hotkey messages.
+        cp.Parent = (IntPtr)(-3); // HWND_MESSAGE
+        
         this.CreateHandle(cp);
 
         UpdateHotkeys(settings.SaveHotkeyModifiers, settings.SaveHotkeyKey, settings.RestoreHotkeyModifiers, settings.RestoreHotkeyKey);

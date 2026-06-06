@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -11,6 +12,7 @@ public static class SnapshotManager
 {
     private const int MaxCacheSize = 12;
     private static readonly string SnapshotsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "snapshots");
+    private static readonly string FavoritesDir = Path.Combine(SnapshotsDir, "favorites");
     private static readonly List<SnapshotCacheItem> _snapshotCache = new();
     private static readonly object _cacheLock = new();
 
@@ -22,6 +24,7 @@ public static class SnapshotManager
     };
 
     public static string GetSnapshotsDirectory() => SnapshotsDir;
+    public static string GetFavoritesDirectory() => FavoritesDir;
 
     public static void InitializeCache()
     {
@@ -29,6 +32,33 @@ public static class SnapshotManager
         {
             _snapshotCache.Clear();
             if (!Directory.Exists(SnapshotsDir)) return;
+
+            // Load Favorites first
+            if (Directory.Exists(FavoritesDir))
+            {
+                var favDir = new DirectoryInfo(FavoritesDir);
+                foreach (var file in favDir.GetFiles("snapshot_*.json").OrderByDescending(f => f.CreationTime))
+                {
+                    Snapshot? snapshot = null;
+                    try
+                    {
+                        string json = File.ReadAllText(file.FullName);
+                        snapshot = JsonSerializer.Deserialize<Snapshot>(json, _jsonOptions);
+                    }
+                    catch { }
+
+                    _snapshotCache.Add(new SnapshotCacheItem
+                    {
+                        FullName = file.FullName,
+                        Name = file.Name,
+                        CreationTime = file.CreationTime,
+                        Snapshot = snapshot,
+                        IsFavorite = true
+                    });
+                }
+            }
+
+            // Load regular snapshots up to limit
             var dir = new DirectoryInfo(SnapshotsDir);
             var files = dir.GetFiles("snapshot_*.json").OrderByDescending(f => f.CreationTime).Take(MaxCacheSize).ToArray();
             foreach (var file in files)
@@ -46,7 +76,8 @@ public static class SnapshotManager
                     FullName = file.FullName,
                     Name = file.Name,
                     CreationTime = file.CreationTime,
-                    Snapshot = snapshot
+                    Snapshot = snapshot,
+                    IsFavorite = false
                 });
             }
         }
@@ -79,19 +110,23 @@ public static class SnapshotManager
             var fileInfo = new FileInfo(path);
             lock (_cacheLock)
             {
-                _snapshotCache.Insert(0, new SnapshotCacheItem
+                _snapshotCache.Add(new SnapshotCacheItem
                 {
                     FullName = fileInfo.FullName,
                     Name = fileInfo.Name,
                     CreationTime = fileInfo.CreationTime,
-                    Snapshot = snapshot
+                    Snapshot = snapshot,
+                    IsFavorite = false
                 });
                 
-                if (_snapshotCache.Count > MaxCacheSize)
+                // Keep cache ordered (Favorites first, then recents sorted by time)
+                SortCacheUnderLock();
+
+                // Clean up non-favorite overflow files on disk and in cache
+                var nonFavs = _snapshotCache.Where(c => !c.IsFavorite).ToList();
+                if (nonFavs.Count > MaxCacheSize)
                 {
-                    var itemsToRemove = _snapshotCache.GetRange(MaxCacheSize, _snapshotCache.Count - MaxCacheSize);
-                    _snapshotCache.RemoveRange(MaxCacheSize, _snapshotCache.Count - MaxCacheSize);
-                    
+                    var itemsToRemove = nonFavs.Skip(MaxCacheSize).ToList();
                     foreach (var item in itemsToRemove)
                     {
                         try
@@ -105,6 +140,7 @@ public static class SnapshotManager
                         {
                             Debug.WriteLine($"Failed to delete overflow snapshot file: {ex.Message}");
                         }
+                        _snapshotCache.Remove(item);
                     }
                 }
 
@@ -117,9 +153,69 @@ public static class SnapshotManager
         }
     }
 
+    public static void ToggleFavorite(SnapshotCacheItem item)
+    {
+        lock (_cacheLock)
+        {
+            try
+            {
+                if (!Directory.Exists(FavoritesDir))
+                {
+                    Directory.CreateDirectory(FavoritesDir);
+                }
+
+                string currentPath = item.FullName;
+                string newPath;
+
+                if (item.IsFavorite)
+                {
+                    // Unstar: Move back to regular snapshots
+                    newPath = Path.Combine(SnapshotsDir, item.Name);
+                    if (File.Exists(currentPath))
+                    {
+                        File.Move(currentPath, newPath, true);
+                    }
+                    item.IsFavorite = false;
+                    item.FullName = newPath;
+                }
+                else
+                {
+                    // Star: Move to favorites
+                    newPath = Path.Combine(FavoritesDir, item.Name);
+                    if (File.Exists(currentPath))
+                    {
+                        File.Move(currentPath, newPath, true);
+                    }
+                    item.IsFavorite = true;
+                    item.FullName = newPath;
+                }
+
+                SortCacheUnderLock();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to toggle favorite: {ex.Message}");
+            }
+        }
+    }
+
+    private static void SortCacheUnderLock()
+    {
+        var favs = _snapshotCache.Where(c => c.IsFavorite).OrderByDescending(c => c.CreationTime).ToList();
+        var recents = _snapshotCache.Where(c => !c.IsFavorite).OrderByDescending(c => c.CreationTime).ToList();
+        
+        _snapshotCache.Clear();
+        _snapshotCache.AddRange(favs);
+        _snapshotCache.AddRange(recents);
+    }
+
     public static void RestoreLatestSnapshot(Settings settings)
     {
-        var latest = GetCachedSnapshots().FirstOrDefault();
+        var latest = GetCachedSnapshots().FirstOrDefault(c => !c.IsFavorite);
+        if (latest == null)
+        {
+            latest = GetCachedSnapshots().FirstOrDefault();
+        }
         if (latest != null)
         {
             RestoreSnapshot(latest.FullName, settings);
@@ -146,7 +242,7 @@ public static class SnapshotManager
         try
         {
             if (!Directory.Exists(SnapshotsDir)) return;
-            var files = GetSortedSnapshots();
+            var files = GetSortedSnapshots(); // This only grabs from main snapshots/ dir
             var threshold = DateTime.Now.AddMinutes(-limitMinutes);
 
             foreach (var file in files)
@@ -158,7 +254,7 @@ public static class SnapshotManager
             }
 
             // Sync cache with current files (called under lock)
-            _snapshotCache.RemoveAll(item => !File.Exists(item.FullName));
+            _snapshotCache.RemoveAll(item => !item.IsFavorite && !File.Exists(item.FullName));
         }
         catch (Exception ex)
         {

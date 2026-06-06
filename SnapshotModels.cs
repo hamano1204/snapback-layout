@@ -60,4 +60,5 @@ public class SnapshotCacheItem
     public string Name { get; set; } = string.Empty;
     public DateTime CreationTime { get; set; }
     public Snapshot? Snapshot { get; set; }
+    public bool IsFavorite { get; set; }
 }
