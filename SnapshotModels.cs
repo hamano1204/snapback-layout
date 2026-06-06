@@ -30,6 +30,7 @@ public class WindowInfo
     public Bounds Bounds { get; set; } = new();
     public int ZIndex { get; set; }
     public int MonitorId { get; set; }
+    public bool IsForeground { get; set; }
 }
 
 public class Bounds

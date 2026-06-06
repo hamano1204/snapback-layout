@@ -227,20 +227,39 @@ public class AppContext : ApplicationContext
                 Snapshot? snapshot = item.Snapshot;
                 string displayName = dateStr;
                 var windowTitles = new List<string>();
-
                 if (snapshot != null && snapshot.Windows != null)
                 {
-                    // Find top 3 unique process names
-                    var appNames = snapshot.Windows
-                        .Select(w => w.ProcessName)
-                        .Where(n => !string.IsNullOrEmpty(n))
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .Take(3)
-                        .ToList();
-
-                    if (appNames.Count > 0)
+                    var foregroundWin = snapshot.Windows.FirstOrDefault(w => w.IsForeground);
+                    if (foregroundWin == null || string.IsNullOrEmpty(foregroundWin.Title))
                     {
-                        displayName = $"{dateStr} ({string.Join(", ", appNames)})";
+                        foregroundWin = snapshot.Windows.FirstOrDefault(w => !string.IsNullOrEmpty(w.Title));
+                    }
+
+                    int otherWindowsCount = snapshot.Windows.Count(w => !string.IsNullOrEmpty(w.Title)) - 1;
+                    if (otherWindowsCount < 0) otherWindowsCount = 0;
+
+                    if (foregroundWin != null)
+                    {
+                        string processTag = string.IsNullOrEmpty(foregroundWin.ProcessName) ? "" : $"[{foregroundWin.ProcessName}] ";
+                        string activeTitle = foregroundWin.Title;
+                        if (activeTitle.Length > 25) activeTitle = activeTitle.Substring(0, 22) + "...";
+                        
+                        string countTag = otherWindowsCount > 0 ? $" (+{otherWindowsCount})" : "";
+                        displayName = $"{dateStr} - Active: {processTag}{activeTitle}{countTag}";
+                    }
+                    else
+                    {
+                        var appNames = snapshot.Windows
+                            .Select(w => w.ProcessName)
+                            .Where(n => !string.IsNullOrEmpty(n))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .Take(3)
+                            .ToList();
+
+                        if (appNames.Count > 0)
+                        {
+                            displayName = $"{dateStr} ({string.Join(", ", appNames)})";
+                        }
                     }
 
                     windowTitles = snapshot.Windows

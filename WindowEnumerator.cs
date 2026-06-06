@@ -44,6 +44,8 @@ public static class WindowEnumerator
         var processNameCache = new Dictionary<uint, string>();
         int zOrder = 1;
 
+        IntPtr foregroundWnd = Win32.GetForegroundWindow();
+
         // Reuse StringBuilders to avoid GC pressure during enumeration
         var classBuilder = new StringBuilder(256);
         var titleBuilder = new StringBuilder(512);
@@ -52,7 +54,7 @@ public static class WindowEnumerator
         {
             if (ShouldIncludeWindow(hWnd, classBuilder, titleBuilder))
             {
-                var winInfo = GetWindowInfo(hWnd, zOrder++, screens, processNameCache, classBuilder, titleBuilder);
+                var winInfo = GetWindowInfo(hWnd, zOrder++, screens, processNameCache, classBuilder, titleBuilder, foregroundWnd);
                 if (winInfo != null)
                 {
                     windows.Add(winInfo);
@@ -119,7 +121,7 @@ public static class WindowEnumerator
         return true;
     }
 
-    private static WindowInfo? GetWindowInfo(IntPtr hWnd, int zIndex, Screen[] screens, Dictionary<uint, string> processNameCache, StringBuilder classBuilder, StringBuilder titleBuilder)
+    private static WindowInfo? GetWindowInfo(IntPtr hWnd, int zIndex, Screen[] screens, Dictionary<uint, string> processNameCache, StringBuilder classBuilder, StringBuilder titleBuilder, IntPtr foregroundWnd)
     {
         try
         {
@@ -189,7 +191,8 @@ public static class WindowEnumerator
                     Height = rect.Height
                 },
                 ZIndex = zIndex,
-                MonitorId = monitorId
+                MonitorId = monitorId,
+                IsForeground = (hWnd == foregroundWnd)
             };
         }
         catch (Exception ex)
