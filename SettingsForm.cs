@@ -16,10 +16,11 @@ public class SettingsForm : Form
     private readonly Button _btnOk;
     private readonly Button _btnCancel;
 
-    public Settings UpdatedSettings { get; }
+    public Settings UpdatedSettings { get; private set; }
 
     public SettingsForm(Settings currentSettings)
     {
+        // Keep a copy as the initial state
         UpdatedSettings = new Settings
         {
             AutoSaveEnabled = currentSettings.AutoSaveEnabled,
@@ -303,15 +304,18 @@ public class SettingsForm : Form
 
     private void BtnOk_Click(object? sender, EventArgs e)
     {
-        UpdatedSettings.AutoSaveEnabled = _chkAutoSave.Checked;
-        UpdatedSettings.AutoSaveIntervalMinutes = GetIntervalMinutes();
-        UpdatedSettings.HistoryLimitMinutes = GetHistoryLimitMinutes();
-        UpdatedSettings.DpiCorrectionEnabled = _chkDpiCorrection.Checked;
-        UpdatedSettings.StartWithWindows = _chkStartWithWindows.Checked;
-        UpdatedSettings.SaveHotkeyModifiers = _txtSaveHotkey.HotkeyModifiers;
-        UpdatedSettings.SaveHotkeyKey = (uint)_txtSaveHotkey.HotkeyKey;
-        UpdatedSettings.RestoreHotkeyModifiers = _txtRestoreHotkey.HotkeyModifiers;
-        UpdatedSettings.RestoreHotkeyKey = (uint)_txtRestoreHotkey.HotkeyKey;
+        UpdatedSettings = new Settings
+        {
+            AutoSaveEnabled = _chkAutoSave.Checked,
+            AutoSaveIntervalMinutes = GetIntervalMinutes(),
+            HistoryLimitMinutes = GetHistoryLimitMinutes(),
+            DpiCorrectionEnabled = _chkDpiCorrection.Checked,
+            StartWithWindows = _chkStartWithWindows.Checked,
+            SaveHotkeyModifiers = _txtSaveHotkey.HotkeyModifiers,
+            SaveHotkeyKey = (uint)_txtSaveHotkey.HotkeyKey,
+            RestoreHotkeyModifiers = _txtRestoreHotkey.HotkeyModifiers,
+            RestoreHotkeyKey = (uint)_txtRestoreHotkey.HotkeyKey
+        };
         this.Close();
     }
 }

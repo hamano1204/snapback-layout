@@ -75,6 +75,7 @@ public class PreviewControl : UserControl
         // To draw them on the canvas so that topmost windows stack ON TOP of background ones,
         // we must draw in reverse order (bottom-most windows first, topmost windows last).
         var sortedWindows = _snapshot.Windows.OrderByDescending(w => w.ZIndex).ToList();
+        using var labelFont = new Font("Segoe UI", 6.5F, FontStyle.Regular);
         foreach (var win in sortedWindows)
         {
             if (win.Bounds.Width <= 0 || win.Bounds.Height <= 0) continue;
@@ -105,9 +106,7 @@ public class PreviewControl : UserControl
             if (ww > 32 && wh > 12)
             {
                 string processAbbrev = win.ProcessName.Length > 7 ? win.ProcessName.Substring(0, 6) : win.ProcessName;
-                using var labelBrush = new SolidBrush(Color.White);
-                using var labelFont = new Font("Segoe UI", 6.5F, FontStyle.Regular);
-                e.Graphics.DrawString(processAbbrev, labelFont, labelBrush, wx + 1, wy + 1);
+                e.Graphics.DrawString(processAbbrev, labelFont, Brushes.White, wx + 1, wy + 1);
             }
         }
     }

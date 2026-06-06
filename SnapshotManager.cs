@@ -211,11 +211,8 @@ public static class SnapshotManager
 
     public static void RestoreLatestSnapshot(Settings settings)
     {
-        var latest = GetCachedSnapshots().FirstOrDefault(c => !c.IsFavorite);
-        if (latest == null)
-        {
-            latest = GetCachedSnapshots().FirstOrDefault();
-        }
+        var all = GetCachedSnapshots();
+        var latest = all.FirstOrDefault(c => !c.IsFavorite) ?? all.FirstOrDefault();
         if (latest != null)
         {
             RestoreSnapshot(latest.FullName, settings);

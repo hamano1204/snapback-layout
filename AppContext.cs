@@ -1,11 +1,9 @@
 using System;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Windows.Forms;
 
 namespace snapback_layout;
@@ -18,6 +16,15 @@ public class AppContext : ApplicationContext
     private readonly HotkeyWindow _hotkeyWindow;
     private Settings _settings;
     private IntPtr _hIcon = IntPtr.Zero;
+    private Icon? _trayIcon;
+    private Image? _starFavoriteImage;
+    private Image? _starNormalImage;
+
+    // Cached Fonts to avoid GDI leaks
+    private Font? _menuBoldFont;
+    private Font? _menuItalicFont;
+    private Font? _menuSubFont;
+    private Font? _menuGuideFont;
 
     private readonly NotifyIcon _notifyIcon;
     private readonly ContextMenuStrip _contextMenu;
@@ -35,6 +42,7 @@ public class AppContext : ApplicationContext
         // 2. Setup Context Menu
         _contextMenu = new ContextMenuStrip();
         _historyContextMenu = new ContextMenuStrip();
+        _historyContextMenu.Closed += ParentDropDown_Closed;
         
         _saveMenuItem = new ToolStripMenuItem("Save Layout", null, (s, e) => OnSaveLayout());
         _restoreMenuItem = new ToolStripMenuItem("Restore Layout", null, (s, e) => OnRestoreLayout());
@@ -52,9 +60,10 @@ public class AppContext : ApplicationContext
         });
 
         // 3. Setup Notify Icon
+        _trayIcon = CreateTrayIcon();
         _notifyIcon = new NotifyIcon
         {
-            Icon = CreateTrayIcon(),
+            Icon = _trayIcon,
             ContextMenuStrip = _contextMenu,
             Text = "snapback-layout",
             Visible = true
@@ -218,12 +227,20 @@ public class AppContext : ApplicationContext
             item.Dispose();
         }
 
+        // Initialize cached fonts lazily
+        _menuBoldFont ??= new Font(SystemFonts.DefaultFont, FontStyle.Bold);
+        _menuItalicFont ??= new Font(SystemFonts.DefaultFont, FontStyle.Italic);
+        _menuSubFont ??= new Font(SystemFonts.DefaultFont.FontFamily, 7.5F, FontStyle.Regular);
+        _menuGuideFont ??= new Font(SystemFonts.DefaultFont.FontFamily, 8.25F, FontStyle.Regular);
+
+        var now = DateTime.Now;
+
         // Add visual descriptive header
         var headerTitle = new ToolStripMenuItem("Restore Window Layout History") { Enabled = false };
-        headerTitle.Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold);
+        headerTitle.Font = _menuBoldFont;
         
         var headerSub = new ToolStripMenuItem("  (Hover to preview layout | Click ★ to pin)") { Enabled = false };
-        headerSub.Font = new Font(SystemFonts.DefaultFont.FontFamily, 7.5F, FontStyle.Regular);
+        headerSub.Font = _menuSubFont;
         headerSub.ForeColor = Color.Gray;
 
         _historyContextMenu.Items.Add(headerTitle);
@@ -237,10 +254,10 @@ public class AppContext : ApplicationContext
             _historyContextMenu.Items.Add(new ToolStripSeparator());
             
             var guideItem = new ToolStripMenuItem("👉 Save your first layout:") { Enabled = false };
-            guideItem.Font = new Font(SystemFonts.DefaultFont, FontStyle.Italic);
+            guideItem.Font = _menuItalicFont;
             
             var guideItem2 = new ToolStripMenuItem("   Right-click this icon & select 'Save Layout'") { Enabled = false };
-            guideItem2.Font = new Font(SystemFonts.DefaultFont.FontFamily, 8.25F, FontStyle.Regular);
+            guideItem2.Font = _menuGuideFont;
             
             _historyContextMenu.Items.Add(guideItem);
             _historyContextMenu.Items.Add(guideItem2);
@@ -250,10 +267,10 @@ public class AppContext : ApplicationContext
             var starred = cachedSnapshots.Where(c => c.IsFavorite).ToList();
             if (starred.Count > 0)
             {
-                _historyContextMenu.Items.Add(new ToolStripMenuItem("★ Starred Layouts") { Enabled = false, Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold) });
+                _historyContextMenu.Items.Add(new ToolStripMenuItem("★ Starred Layouts") { Enabled = false, Font = _menuBoldFont });
                 foreach (var item in starred)
                 {
-                    _historyContextMenu.Items.Add(CreateSnapshotMenuItem(item));
+                    _historyContextMenu.Items.Add(CreateSnapshotMenuItem(item, now));
                 }
                 _historyContextMenu.Items.Add(new ToolStripSeparator());
             }
@@ -263,19 +280,19 @@ public class AppContext : ApplicationContext
             {
                 if (starred.Count > 0)
                 {
-                    _historyContextMenu.Items.Add(new ToolStripMenuItem("Recent Layouts") { Enabled = false, Font = new Font(SystemFonts.DefaultFont, FontStyle.Italic) });
+                    _historyContextMenu.Items.Add(new ToolStripMenuItem("Recent Layouts") { Enabled = false, Font = _menuItalicFont });
                 }
                 foreach (var item in recents)
                 {
-                    _historyContextMenu.Items.Add(CreateSnapshotMenuItem(item));
+                    _historyContextMenu.Items.Add(CreateSnapshotMenuItem(item, now));
                 }
             }
         }
     }
 
-    private static string GetRelativeTime(DateTime creationTime)
+    private static string GetRelativeTime(DateTime creationTime, DateTime now)
     {
-        var span = DateTime.Now - creationTime;
+        var span = now - creationTime;
         if (span.TotalMinutes < 1) return "just now";
         if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
         if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
@@ -299,7 +316,7 @@ public class AppContext : ApplicationContext
         }
     }
 
-    private ToolStripMenuItem CreateSnapshotMenuItem(SnapshotCacheItem item)
+    private ToolStripMenuItem CreateSnapshotMenuItem(SnapshotCacheItem item, DateTime now)
     {
         string timeLabel = item.Name;
         if (item.Name.StartsWith("snapshot_") && item.Name.EndsWith(".json"))
@@ -309,7 +326,7 @@ public class AppContext : ApplicationContext
             if (DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss", null, System.Globalization.DateTimeStyles.None, out DateTime dt) ||
                 DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss_fff", null, System.Globalization.DateTimeStyles.None, out dt))
             {
-                timeLabel = $"{dt.ToString("HH:mm")} ({GetRelativeTime(item.CreationTime)})";
+                timeLabel = $"{dt.ToString("HH:mm")} ({GetRelativeTime(item.CreationTime, now)})";
             }
         }
 
@@ -346,11 +363,12 @@ public class AppContext : ApplicationContext
         }
 
         // Custom drawn item to support the interactive Star icon
+        _starFavoriteImage ??= CreateStarIcon(Color.FromArgb(234, 179, 8)); // Golden filled star
+        _starNormalImage ??= CreateStarIcon(Color.FromArgb(156, 163, 175)); // Gray outline star
+
         var snapshotItem = new ToolStripMenuItem(displayName)
         {
-            Image = item.IsFavorite 
-                ? CreateStarIcon(Color.FromArgb(234, 179, 8)) // Golden filled star
-                : CreateStarIcon(Color.FromArgb(156, 163, 175)), // Gray outline star
+            Image = item.IsFavorite ? _starFavoriteImage : _starNormalImage,
             ImageScaling = ToolStripItemImageScaling.None
         };
 
@@ -401,9 +419,6 @@ public class AppContext : ApplicationContext
 
                 if (snapshotItem.Owner is ToolStripDropDown parentDropDown)
                 {
-                    parentDropDown.Closed -= ParentDropDown_Closed;
-                    parentDropDown.Closed += ParentDropDown_Closed;
-
                     var screenPt = parentDropDown.PointToScreen(new Point(snapshotItem.Bounds.Left, snapshotItem.Bounds.Top));
                     
                     int px = screenPt.X - 320 - 5;
@@ -483,7 +498,7 @@ public class AppContext : ApplicationContext
 
         _hIcon = bitmap.GetHicon();
         // Use clone to create a managed Icon instance that takes ownership or is independent,
-        // and keep track of _hIcon to destroy it on Dispose.
+        // and keep track of _hIcon to destroy it on Dispose (which prevents GDI leak of the native HICON).
         return Icon.FromHandle(_hIcon);
     }
 
@@ -497,6 +512,17 @@ public class AppContext : ApplicationContext
             _contextMenu.Dispose();
             _historyContextMenu.Dispose();
             
+            _trayIcon?.Dispose();
+            _starFavoriteImage?.Dispose();
+            _starNormalImage?.Dispose();
+
+            // Clean up cached fonts to avoid GDI leak
+            _menuBoldFont?.Dispose();
+            _menuItalicFont?.Dispose();
+            _menuSubFont?.Dispose();
+            _menuGuideFont?.Dispose();
+
+            // Destroy native Win32 icon handle
             if (_hIcon != IntPtr.Zero)
             {
                 Win32.DestroyIcon(_hIcon);

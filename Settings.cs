@@ -40,6 +40,23 @@ public class Settings
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error loading settings: {ex.Message}");
+            try
+            {
+                string backupPath = ConfigPath + ".bak";
+                if (File.Exists(ConfigPath))
+                {
+                    if (File.Exists(backupPath))
+                    {
+                        File.Delete(backupPath);
+                    }
+                    File.Move(ConfigPath, backupPath);
+                    System.Diagnostics.Debug.WriteLine($"Corrupted settings file moved to {backupPath}");
+                }
+            }
+            catch (Exception moveEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to backup corrupted settings: {moveEx.Message}");
+            }
         }
         return new Settings();
     }
