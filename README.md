@@ -102,3 +102,9 @@ dotnet run
 
 This project is licensed under the MIT-0 License (MIT No Attribution). See the [LICENSE](file:///c:/Users/haman_9/dev/snapback-layout/LICENSE) file for details.
 本プロジェクトは MIT-0 ライセンス (MIT No Attribution) の下で提供されています。詳細は [LICENSE](file:///c:/Users/haman_9/dev/snapback-layout/LICENSE) ファイルを参照してください。
+
+
+## Screenshot
+
+![image](images/image.png)
+
