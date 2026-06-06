@@ -13,7 +13,7 @@
 * 📸 **Instant Layout Backup & Restore**: Instantly save current desktop layouts and restore them precisely.
 * ⌨️ **Global Hotkey Customization**: Custom hotkeys for saving and restoring layouts (supports modifier keys including the `Windows` key).
 * ⏱️ **Silent Auto-Save**: Periodically backs up your layout in the background without disturbing your work.
-* 📜 **Visual History Menu**: Retains the last 12 snapshots in system tray context menu. Displays top process names for each snapshot and hovers to preview all saved window titles.
+* 📜 **Visual History Menu**: Left-click the system tray icon to display a dedicated popup menu showing the last 12 snapshots directly. Each item displays the active foreground window title at the time of the snapshot and the time (HH:mm). Clicking an item immediately restores that layout.
 * 🖥️ **DPI Correction**: Automatically scales window bounds and relative coordinates when restoring layouts across monitors with different DPI factors.
 * 🛟 **Off-screen Window Rescue**: Prevents "lost windows" by automatically centering coordinates onto the primary monitor if a saved window would restore off-screen (e.g., after disconnecting a monitor).
 * 🥞 **Exact Z-Order Restoration**: Accurately restores the relative layering stack (front-to-back order) of all windows.
@@ -56,7 +56,7 @@ dotnet run
 * 📸 **レイアウトの即時保存・復元**: 現在のウィンドウ配置をキャプチャし、必要な時にいつでも元の位置・サイズに復帰させます。
 * ⌨️ **カスタムホットキー**: 保存・復元のホットキーを自由に変更可能（`Windows` キーを含むショートカットキーに対応）。
 * ⏱️ **静かな自動保存 (Auto-Save)**: 作業を邪魔しないサイレント仕様で、指定した間隔で自動的にバックアップを保存します。
-* 📜 **トレイ履歴メニュー**: 直近12回の履歴をシステムトレイメニューから選択可能。各項目には起動していた上位プロセス名が併記され、ホバーするとすべてのウィンドウタイトルがプレビュー表示されます。
+* 📜 **履歴メニューへのクイックアクセス**: システムトレイアイコンを左クリックすると、直近12回の履歴だけを表示する専用のポップアップが展開されます。各項目にはスナップショット作成時にアクティブだったウィンドウタイトルと作成時刻（HH:mm）が分かりやすく表示され、クリックするだけで瞬時に復元を実行できます。
 * 🖥️ **DPI自動補正機能**: 異なるDPI（ディスプレイ拡大率）のモニター間でレイアウトを復元する際、解像度に合わせてサイズや相対位置を自動的にスケーリング補正します。
 * 🛟 **画面外ウィンドウ救出機能**: モニター接続解除などにより復元先座標が画面外に孤立してしまう場合、メインモニターの安全な領域（中央）へ自動的に引き戻します。
 * 🥞 **正確な Z-Order 復元**: すべてのウィンドウの重なり順（前後関係）を保存時の順番通りに忠実に再現します。

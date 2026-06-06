@@ -22,6 +22,7 @@ public class AppContext : ApplicationContext
 
     private readonly NotifyIcon _notifyIcon;
     private readonly ContextMenuStrip _contextMenu;
+    private readonly ContextMenuStrip _historyContextMenu;
 
     public AppContext()
     {
@@ -34,6 +35,7 @@ public class AppContext : ApplicationContext
 
         // 2. Setup Context Menu
         _contextMenu = new ContextMenuStrip();
+        _historyContextMenu = new ContextMenuStrip();
         
         _saveMenuItem = new ToolStripMenuItem("Save Layout", null, (s, e) => OnSaveLayout());
         _restoreMenuItem = new ToolStripMenuItem("Restore Layout", null, (s, e) => OnRestoreLayout());
@@ -65,6 +67,13 @@ public class AppContext : ApplicationContext
 
         // Double click tray icon restores the latest layout
         _notifyIcon.DoubleClick += (s, e) => OnRestoreLayout();
+        _notifyIcon.MouseUp += (s, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                ShowHistoryOnlyMenu();
+            }
+        };
 
         // 4. Setup Auto-Save Timer
         _autoSaveTimer = new System.Windows.Forms.Timer();
@@ -202,7 +211,6 @@ public class AppContext : ApplicationContext
         }
 
         var cachedSnapshots = SnapshotManager.GetCachedSnapshots();
-
         if (cachedSnapshots.Count == 0)
         {
             _historyMenuItem.DropDownItems.Add(new ToolStripMenuItem("No snapshots found") { Enabled = false });
@@ -211,92 +219,91 @@ public class AppContext : ApplicationContext
         {
             foreach (var item in cachedSnapshots)
             {
-                string name = item.Name;
-                string dateStr = name;
-                
-                if (name.StartsWith("snapshot_") && name.EndsWith(".json") && name.Length >= 24)
-                {
-                    string datePart = name.Substring(9, name.Length - 9 - 5); // strip "snapshot_" and ".json"
-                    if (DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss", null, System.Globalization.DateTimeStyles.None, out DateTime dt) ||
-                        DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss_fff", null, System.Globalization.DateTimeStyles.None, out dt))
-                    {
-                        dateStr = dt.ToString("yyyy-MM-dd HH:mm:ss");
-                    }
-                }
-
-                Snapshot? snapshot = item.Snapshot;
-                string displayName = dateStr;
-                var windowTitles = new List<string>();
-                if (snapshot != null && snapshot.Windows != null)
-                {
-                    var foregroundWin = snapshot.Windows.FirstOrDefault(w => w.IsForeground);
-                    if (foregroundWin == null || string.IsNullOrEmpty(foregroundWin.Title))
-                    {
-                        foregroundWin = snapshot.Windows.FirstOrDefault(w => !string.IsNullOrEmpty(w.Title));
-                    }
-
-                    int otherWindowsCount = snapshot.Windows.Count(w => !string.IsNullOrEmpty(w.Title)) - 1;
-                    if (otherWindowsCount < 0) otherWindowsCount = 0;
-
-                    if (foregroundWin != null)
-                    {
-                        string processTag = string.IsNullOrEmpty(foregroundWin.ProcessName) ? "" : $"[{foregroundWin.ProcessName}] ";
-                        string activeTitle = foregroundWin.Title;
-                        if (activeTitle.Length > 25) activeTitle = activeTitle.Substring(0, 22) + "...";
-                        
-                        string countTag = otherWindowsCount > 0 ? $" (+{otherWindowsCount})" : "";
-                        displayName = $"{dateStr} - Active: {processTag}{activeTitle}{countTag}";
-                    }
-                    else
-                    {
-                        var appNames = snapshot.Windows
-                            .Select(w => w.ProcessName)
-                            .Where(n => !string.IsNullOrEmpty(n))
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .Take(3)
-                            .ToList();
-
-                        if (appNames.Count > 0)
-                        {
-                            displayName = $"{dateStr} ({string.Join(", ", appNames)})";
-                        }
-                    }
-
-                    windowTitles = snapshot.Windows
-                        .Select(w => w.Title)
-                        .Where(t => !string.IsNullOrEmpty(t))
-                        .ToList();
-                }
-
-                var snapshotItem = new ToolStripMenuItem(displayName);
-                string path = item.FullName;
-                string displayLabel = dateStr;
-
-                // Click action for the parent menu item
-                snapshotItem.Click += (s, ev) => RestoreSnapshotAction(path, displayLabel);
-
-                // Add sub-menu details
-                if (snapshot != null && windowTitles.Count > 0)
-                {
-                    var restoreActionItem = new ToolStripMenuItem("Restore this layout", null, (s, ev) => RestoreSnapshotAction(path, displayLabel))
-                    {
-                        Font = new Font(snapshotItem.Font, FontStyle.Bold)
-                    };
-                    snapshotItem.DropDownItems.Add(restoreActionItem);
-                    snapshotItem.DropDownItems.Add(new ToolStripSeparator());
-
-                    foreach (var title in windowTitles)
-                    {
-                        // Truncate long titles to prevent menu from being too wide
-                        string truncatedTitle = title.Length > 50 ? title.Substring(0, 47) + "..." : title;
-                        var titleItem = new ToolStripMenuItem(truncatedTitle) { Enabled = false };
-                        snapshotItem.DropDownItems.Add(titleItem);
-                    }
-                }
-
-                _historyMenuItem.DropDownItems.Add(snapshotItem);
+                _historyMenuItem.DropDownItems.Add(CreateSnapshotMenuItem(item));
             }
         }
+    }
+
+    private void ShowHistoryOnlyMenu()
+    {
+        // Clear existing items to prevent duplicates/leaks
+        while (_historyContextMenu.Items.Count > 0)
+        {
+            var item = _historyContextMenu.Items[0];
+            _historyContextMenu.Items.RemoveAt(0);
+            item.Dispose();
+        }
+        
+        var cachedSnapshots = SnapshotManager.GetCachedSnapshots();
+        if (cachedSnapshots.Count == 0)
+        {
+            _historyContextMenu.Items.Add(new ToolStripMenuItem("No snapshots found") { Enabled = false });
+        }
+        else
+        {
+            foreach (var item in cachedSnapshots)
+            {
+                _historyContextMenu.Items.Add(CreateSnapshotMenuItem(item));
+            }
+        }
+
+        _historyContextMenu.Show(Cursor.Position);
+    }
+
+    private ToolStripMenuItem CreateSnapshotMenuItem(SnapshotCacheItem item)
+    {
+        string displayLabel = item.Name;
+        if (item.Name.StartsWith("snapshot_") && item.Name.EndsWith(".json") && item.Name.Length >= 24)
+        {
+            string datePart = item.Name.Substring(9, item.Name.Length - 9 - 5);
+            if (DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss", null, System.Globalization.DateTimeStyles.None, out DateTime dt) ||
+                DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss_fff", null, System.Globalization.DateTimeStyles.None, out dt))
+            {
+                displayLabel = dt.ToString("HH:mm");
+            }
+        }
+
+        string displayName = displayLabel;
+        var snapshot = item.Snapshot;
+        if (snapshot != null && snapshot.Windows != null)
+        {
+            var foregroundWin = snapshot.Windows.FirstOrDefault(w => w.IsForeground);
+            if (foregroundWin == null || string.IsNullOrEmpty(foregroundWin.Title))
+            {
+                foregroundWin = snapshot.Windows.FirstOrDefault(w => !string.IsNullOrEmpty(w.Title));
+            }
+
+            int otherWindowsCount = snapshot.Windows.Count(w => !string.IsNullOrEmpty(w.Title)) - 1;
+            if (otherWindowsCount < 0) otherWindowsCount = 0;
+
+            if (foregroundWin != null)
+            {
+                string processTag = string.IsNullOrEmpty(foregroundWin.ProcessName) ? "" : $"[{foregroundWin.ProcessName}] ";
+                string activeTitle = foregroundWin.Title;
+                if (activeTitle.Length > 25) activeTitle = activeTitle.Substring(0, 22) + "...";
+                
+                string countTag = otherWindowsCount > 0 ? $" (+{otherWindowsCount})" : "";
+                displayName = $"{displayLabel} - Active: {processTag}{activeTitle}{countTag}";
+            }
+            else
+            {
+                var appNames = snapshot.Windows
+                    .Select(w => w.ProcessName)
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(3)
+                    .ToList();
+
+                if (appNames.Count > 0)
+                {
+                    displayName = $"{displayLabel} ({string.Join(", ", appNames)})";
+                }
+            }
+        }
+
+        var snapshotItem = new ToolStripMenuItem(displayName);
+        snapshotItem.Click += (s, ev) => RestoreSnapshotAction(item.FullName, displayLabel);
+        return snapshotItem;
     }
 
     private void RestoreSnapshotAction(string path, string displayName)
@@ -340,6 +347,7 @@ public class AppContext : ApplicationContext
             _autoSaveTimer.Dispose();
             _hotkeyWindow.Dispose();
             _contextMenu.Dispose();
+            _historyContextMenu.Dispose();
             
             if (_hIcon != IntPtr.Zero)
             {
