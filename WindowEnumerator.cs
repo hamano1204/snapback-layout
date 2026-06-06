@@ -144,13 +144,16 @@ public static class WindowEnumerator
                 processNameCache[pid] = processName;
             }
 
+            string title = titleBuilder.ToString();
+            string className = classBuilder.ToString();
+
             var placement = new Win32.WINDOWPLACEMENT();
             placement.length = Marshal.SizeOf(placement);
             if (!Win32.GetWindowPlacement(hWnd, ref placement)) return null;
 
-            string state = "normal";
-            if (placement.showCmd == Win32.SW_SHOWMAXIMIZED) state = "maximized";
-            else if (placement.showCmd == Win32.SW_SHOWMINIMIZED) state = "minimized";
+            WindowState state = WindowState.Normal;
+            if (placement.showCmd == Win32.SW_SHOWMAXIMIZED) state = WindowState.Maximized;
+            else if (placement.showCmd == Win32.SW_SHOWMINIMIZED) state = WindowState.Minimized;
 
             var rect = placement.rcNormalPosition;
 
@@ -178,10 +181,10 @@ public static class WindowEnumerator
             return new WindowInfo
             {
                 Hwnd = hWnd.ToInt64(),
-                ProcessId = (int)pid,
+                ProcessId = pid,
                 ProcessName = processName,
-                Title = titleBuilder.ToString(),
-                ClassName = classBuilder.ToString(),
+                Title = title,
+                ClassName = className,
                 State = state,
                 Bounds = new Bounds
                 {

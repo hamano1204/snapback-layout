@@ -94,7 +94,7 @@ public static class RestoreEngine
 
         if (foundWnd != IntPtr.Zero) return foundWnd;
 
-        // 3. Fallback: search by Process Name and Class Name or Title
+        // 3. Fallback: search by Process Name and Class Name or Title (prioritizing ClassName match)
         Win32.EnumWindows((h, lParam) =>
         {
             if (!Win32.IsWindowVisible(h)) return true; // Only visible windows
@@ -118,7 +118,11 @@ public static class RestoreEngine
                 titleBuilder.Clear();
                 Win32.GetWindowText(h, titleBuilder, titleBuilder.Capacity);
 
-                if (classBuilder.ToString() == winInfo.ClassName || titleBuilder.ToString() == winInfo.Title)
+                string currentClass = classBuilder.ToString();
+                string currentTitle = titleBuilder.ToString();
+
+                // ClassName must match if both are populated, or Title must match if it's the exact same window.
+                if (currentClass == winInfo.ClassName && (string.IsNullOrEmpty(winInfo.Title) || currentTitle == winInfo.Title))
                 {
                     foundWnd = h;
                     return false;
@@ -130,7 +134,7 @@ public static class RestoreEngine
         return foundWnd;
     }
 
-    private static bool IsWindowStillValid(IntPtr hWnd, int processId, string processName, Dictionary<uint, string> processNameCache)
+    private static bool IsWindowStillValid(IntPtr hWnd, uint processId, string processName, Dictionary<uint, string> processNameCache)
     {
         try
         {
@@ -256,11 +260,11 @@ public static class RestoreEngine
                 Bottom = y + h
             };
 
-            if (winInfo.State == "maximized")
+            if (winInfo.State == WindowState.Maximized)
             {
                 placement.showCmd = Win32.SW_SHOWMAXIMIZED;
             }
-            else if (winInfo.State == "minimized")
+            else if (winInfo.State == WindowState.Minimized)
             {
                 placement.showCmd = Win32.SW_SHOWMINIMIZED;
             }

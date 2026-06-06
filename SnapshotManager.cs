@@ -107,9 +107,9 @@ public static class SnapshotManager
                         }
                     }
                 }
-            }
 
-            PruneOldSnapshots(settings.HistoryLimitMinutes);
+                PruneOldSnapshotsUnderLock(settings.HistoryLimitMinutes);
+            }
         }
         catch (Exception ex)
         {
@@ -135,6 +135,14 @@ public static class SnapshotManager
 
     public static void PruneOldSnapshots(int limitMinutes)
     {
+        lock (_cacheLock)
+        {
+            PruneOldSnapshotsUnderLock(limitMinutes);
+        }
+    }
+
+    private static void PruneOldSnapshotsUnderLock(int limitMinutes)
+    {
         try
         {
             if (!Directory.Exists(SnapshotsDir)) return;
@@ -149,11 +157,8 @@ public static class SnapshotManager
                 }
             }
 
-            // Sync cache with current files
-            lock (_cacheLock)
-            {
-                _snapshotCache.RemoveAll(item => !File.Exists(item.FullName));
-            }
+            // Sync cache with current files (called under lock)
+            _snapshotCache.RemoveAll(item => !File.Exists(item.FullName));
         }
         catch (Exception ex)
         {

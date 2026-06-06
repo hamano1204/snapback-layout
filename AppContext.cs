@@ -253,9 +253,10 @@ public class AppContext : ApplicationContext
     private ToolStripMenuItem CreateSnapshotMenuItem(SnapshotCacheItem item)
     {
         string displayLabel = item.Name;
-        if (item.Name.StartsWith("snapshot_") && item.Name.EndsWith(".json") && item.Name.Length >= 24)
+        if (item.Name.StartsWith("snapshot_") && item.Name.EndsWith(".json"))
         {
-            string datePart = item.Name.Substring(9, item.Name.Length - 9 - 5);
+            string nameWithoutExt = Path.GetFileNameWithoutExtension(item.Name);
+            string datePart = nameWithoutExt["snapshot_".Length..];
             if (DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss", null, System.Globalization.DateTimeStyles.None, out DateTime dt) ||
                 DateTime.TryParseExact(datePart, "yyyyMMdd_HHmmss_fff", null, System.Globalization.DateTimeStyles.None, out dt))
             {
@@ -315,27 +316,31 @@ public class AppContext : ApplicationContext
     private Icon CreateTrayIcon()
     {
         using var bitmap = new Bitmap(16, 16);
-        using var g = Graphics.FromImage(bitmap);
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using (var g = Graphics.FromImage(bitmap))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-        // Draw a premium purple/blue gradient circle representing snapback
-        using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(
-            new Rectangle(0, 0, 16, 16),
-            Color.FromArgb(124, 58, 237), // Violet
-            Color.FromArgb(59, 130, 246),  // Blue
-            45f);
-        g.FillEllipse(brush, 1, 1, 14, 14);
+            // Draw a premium purple/blue gradient circle representing snapback
+            using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(
+                new Rectangle(0, 0, 16, 16),
+                Color.FromArgb(124, 58, 237), // Violet
+                Color.FromArgb(59, 130, 246),  // Blue
+                45f);
+            g.FillEllipse(brush, 1, 1, 14, 14);
 
-        using var pen = new Pen(Color.White, 1.5f);
-        // Draw circular arrow representation
-        g.DrawArc(pen, 3, 3, 10, 10, 45, 270);
-        g.FillPolygon(Brushes.White, new PointF[] {
-            new PointF(10, 3),
-            new PointF(13, 5),
-            new PointF(10, 8)
-        });
+            using var pen = new Pen(Color.White, 1.5f);
+            // Draw circular arrow representation
+            g.DrawArc(pen, 3, 3, 10, 10, 45, 270);
+            g.FillPolygon(Brushes.White, new PointF[] {
+                new PointF(10, 3),
+                new PointF(13, 5),
+                new PointF(10, 8)
+            });
+        }
 
         _hIcon = bitmap.GetHicon();
+        // Use clone to create a managed Icon instance that takes ownership or is independent,
+        // and keep track of _hIcon to destroy it on Dispose.
         return Icon.FromHandle(_hIcon);
     }
 
@@ -352,68 +357,9 @@ public class AppContext : ApplicationContext
             if (_hIcon != IntPtr.Zero)
             {
                 Win32.DestroyIcon(_hIcon);
+                _hIcon = IntPtr.Zero;
             }
         }
         base.Dispose(disposing);
-    }
-
-    private class HotkeyWindow : NativeWindow, IDisposable
-    {
-        private readonly Action _onSave;
-        private readonly Action _onRestore;
-
-        public bool IsRegisteredSuccessfully { get; private set; } = true;
-
-        public HotkeyWindow(Action onSave, Action onRestore, Settings settings)
-        {
-            _onSave = onSave;
-            _onRestore = onRestore;
-            
-            // Create handle for the window to receive messages
-            var cp = new CreateParams();
-            this.CreateHandle(cp);
-
-            UpdateHotkeys(settings.SaveHotkeyModifiers, settings.SaveHotkeyKey, settings.RestoreHotkeyModifiers, settings.RestoreHotkeyKey);
-        }
-
-        public bool UpdateHotkeys(uint saveModifiers, uint saveKey, uint restoreModifiers, uint restoreKey)
-        {
-            Win32.UnregisterHotKey(this.Handle, 1);
-            Win32.UnregisterHotKey(this.Handle, 2);
-
-            bool saveOk = true;
-            bool restoreOk = true;
-
-            if (saveKey != 0)
-            {
-                saveOk = Win32.RegisterHotKey(this.Handle, 1, saveModifiers, saveKey);
-            }
-            if (restoreKey != 0)
-            {
-                restoreOk = Win32.RegisterHotKey(this.Handle, 2, restoreModifiers, restoreKey);
-            }
-
-            IsRegisteredSuccessfully = saveOk && restoreOk;
-            return IsRegisteredSuccessfully;
-        }
-
-        protected override void WndProc(ref Message m)
-        {
-            if (m.Msg == 0x0312) // WM_HOTKEY
-            {
-                int id = m.WParam.ToInt32();
-                if (id == 1) _onSave();
-                else if (id == 2) _onRestore();
-            }
-            base.WndProc(ref m);
-        }
-
-        public void Dispose()
-        {
-            Win32.UnregisterHotKey(this.Handle, 1);
-            Win32.UnregisterHotKey(this.Handle, 2);
-            this.DestroyHandle();
-            GC.SuppressFinalize(this);
-        }
     }
 }

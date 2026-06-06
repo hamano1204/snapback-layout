@@ -9,6 +9,13 @@ public class Settings
     private static readonly string ConfigDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
     private static readonly string ConfigPath = Path.Combine(ConfigDir, "settings.json");
 
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
+    };
+
     public bool AutoSaveEnabled { get; set; } = true;
     public int AutoSaveIntervalMinutes { get; set; } = 5;
     public int HistoryLimitMinutes { get; set; } = 60;
@@ -26,12 +33,7 @@ public class Settings
             if (File.Exists(ConfigPath))
             {
                 string json = File.ReadAllText(ConfigPath);
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    PropertyNameCaseInsensitive = true
-                };
-                var settings = JsonSerializer.Deserialize<Settings>(json, options);
+                var settings = JsonSerializer.Deserialize<Settings>(json, _jsonOptions);
                 if (settings != null) return settings;
             }
         }
@@ -50,12 +52,7 @@ public class Settings
             {
                 Directory.CreateDirectory(ConfigDir);
             }
-            var options = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = true
-            };
-            string json = JsonSerializer.Serialize(this, options);
+            string json = JsonSerializer.Serialize(this, _jsonOptions);
             File.WriteAllText(ConfigPath, json);
         }
         catch (Exception ex)

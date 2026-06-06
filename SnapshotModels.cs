@@ -4,6 +4,13 @@ using System.Text.Json.Serialization;
 
 namespace snapback_layout;
 
+public enum WindowState
+{
+    Normal,
+    Maximized,
+    Minimized
+}
+
 public class Snapshot
 {
     public string Timestamp { get; set; } = string.Empty;
@@ -22,11 +29,13 @@ public class MonitorInfo
 public class WindowInfo
 {
     public long Hwnd { get; set; }
-    public int ProcessId { get; set; }
+    public uint ProcessId { get; set; }
     public string ProcessName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string ClassName { get; set; } = string.Empty;
-    public string State { get; set; } = "normal"; // normal, maximized, minimized
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public WindowState State { get; set; } = WindowState.Normal;
     public Bounds Bounds { get; set; } = new();
     public int ZIndex { get; set; }
     public int MonitorId { get; set; }

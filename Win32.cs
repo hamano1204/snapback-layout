@@ -100,6 +100,7 @@ public static class Win32
     public static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
 
     // Constants
+    public const int WM_HOTKEY = 0x0312;
     public const int GWL_EXSTYLE = -20;
     public const int GWL_STYLE = -16;
     
